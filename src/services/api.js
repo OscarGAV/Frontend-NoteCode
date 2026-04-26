@@ -52,12 +52,11 @@ export async function signIn(username, password) {
 }
 
 // Code Snippets
-export async function createSnippet(code, language) {
+export async function createSnippet(code) {
     return request('/code-snippets', {
         method: 'POST',
         body: JSON.stringify({
             content: code,
-            language: language.toUpperCase(),
             userId: getUserId(),
             isPublic: true,
         }),

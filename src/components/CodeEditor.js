@@ -295,57 +295,15 @@ const CopiedBadge = styled.span`
   font-weight: 500;
 `;
 
-// ─── Language options ─────────────────────────────────────────────────────────
-const LANGUAGES = [
-  { value: 'html',       label: 'HTML' },
-  { value: 'javascript', label: 'JavaScript' },
-  { value: 'css',        label: 'CSS' },
-  { value: 'python',     label: 'Python' },
-  { value: 'java',       label: 'Java' },
-];
-
 const THEME_OPTIONS = [
   { value: 'light', label: 'Light' },
   { value: 'dark',  label: 'Dark' },
 ];
 
 
-// ─── Language detection ───────────────────────────────────────────────────────
-function detectLanguage(code) {
-  const c = code.trim();
-
-  // HTML
-  if (/<(!DOCTYPE|html|head|body|div|span|p|a|img|script|style|meta|link|h[1-6]|ul|li|table|form|input)/i.test(c)) {
-    return 'html';
-  }
-
-  // CSS - before JS to avoid false positives
-  if (/^[\s\S]*[.#]?[\w-]+\s*\{[\s\S]*:[\s\S]*\}/.test(c) && !c.includes('function') && !c.includes('=>')) {
-    return 'css';
-  }
-
-  // Python
-  if (/^(def |class |import |from |if __name__|print\(|elif |lambda |@\w)/.test(c) ||
-      /:\s*$/.test(c.split('\n')[0])) {
-    return 'python';
-  }
-
-  // Java
-  if (/(public\s+(class|interface|enum|static)|@Override|System\.out|import\s+java\.|void\s+\w+\s*\()/.test(c)) {
-    return 'java';
-  }
-
-  // JavaScript / default
-  if (/(const |let |var |function |=>|console\.|require\(|import .* from|export (default|const))/.test(c)) {
-    return 'javascript';
-  }
-
-  return null; // unknown, don't change
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
-function CodeEditor({ code, language, theme, onCodeChange, onLanguageChange, onThemeChange }) {
-  const [isLangOpen,   setIsLangOpen]   = useState(false);
+function CodeEditor({ code, theme, onCodeChange, onThemeChange }) {
   const [isThemeOpen,  setIsThemeOpen]  = useState(false);
   const [shareUrl,     setShareUrl]     = useState(null);
   const [shareLoading, setShareLoading] = useState(false);
@@ -366,7 +324,7 @@ function CodeEditor({ code, language, theme, onCodeChange, onLanguageChange, onT
 
   // Close dropdowns when clicking outside
   useEffect(() => {
-    const handler = () => { setIsLangOpen(false); setIsThemeOpen(false); };
+    const handler = () => { setIsThemeOpen(false); };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, []);
@@ -388,16 +346,6 @@ function CodeEditor({ code, language, theme, onCodeChange, onLanguageChange, onT
     }
   };
 
-  const handlePaste = (e) => {
-    // Let the paste happen naturally, then detect language
-    requestAnimationFrame(() => {
-      if (textareaRef.current) {
-        const pasted = textareaRef.current.value;
-        const detected = detectLanguage(pasted);
-        if (detected) onLanguageChange(detected);
-      }
-    });
-  };
 
   const handleShare = async () => {
     if (!code.trim()) {
@@ -407,7 +355,7 @@ function CodeEditor({ code, language, theme, onCodeChange, onLanguageChange, onT
     setShareError('');
     setShareLoading(true);
     try {
-      const data = await createSnippet(code, language);
+      const data = await createSnippet(code);
       const urlCode = data.shareUrl || data.snippetId;
       const url = `${window.location.origin}/share/${urlCode}`;
       setShareUrl(url);
@@ -456,7 +404,6 @@ function CodeEditor({ code, language, theme, onCodeChange, onLanguageChange, onT
               autoComplete="off"
               autoCorrect="off"
               autoCapitalize="off"
-              onPaste={handlePaste}
           />
         </CodeArea>
 
@@ -464,25 +411,6 @@ function CodeEditor({ code, language, theme, onCodeChange, onLanguageChange, onT
 
         <EditorFooter theme={t}>
           <FooterLeft>
-            {/* Language dropdown */}
-            <Dropdown onClick={e => e.stopPropagation()}>
-              <DropdownButton theme={t} onClick={() => setIsLangOpen(o => !o)}>
-                {LANGUAGES.find(l => l.value === language)?.label || 'HTML'}
-                <DropdownIcon src={DownArrow} alt="dropdown" darkMode={darkMode} />
-              </DropdownButton>
-              <DropdownMenu theme={t} isOpen={isLangOpen}>
-                {LANGUAGES.map(lang => (
-                    <DropdownItem
-                        key={lang.value}
-                        theme={t}
-                        onClick={() => { onLanguageChange(lang.value); setIsLangOpen(false); setShareUrl(null); }}
-                    >
-                      {lang.label}
-                    </DropdownItem>
-                ))}
-              </DropdownMenu>
-            </Dropdown>
-
             {/* Theme dropdown */}
             <Dropdown onClick={e => e.stopPropagation()}>
               <DropdownButton theme={t} onClick={() => setIsThemeOpen(o => !o)}>
