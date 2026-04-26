@@ -82,9 +82,9 @@ const ControlButton = styled.button`
 `;
 
 const CodeArea = styled.div`
-  position: relative;
+  display: flex;
+  flex-direction: row;
   background: ${p => p.theme.editorBg};
-  overflow: hidden;
   max-height: 420px;
   overflow-y: auto;
   transition: background 0.25s;
@@ -95,9 +95,9 @@ const CodeArea = styled.div`
 `;
 
 const LineNumbers = styled.div`
-  position: absolute;
+  position: sticky;
   left: 0;
-  top: 0;
+  flex-shrink: 0;
   background: ${p => p.theme.lineNumBg};
   padding: 1rem 0.75rem;
   font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
@@ -106,13 +106,15 @@ const LineNumbers = styled.div`
   line-height: 1.5;
   user-select: none;
   z-index: 1;
-  min-height: 100%;
+  min-width: 3rem;
+  text-align: right;
   border-right: 1px solid ${p => p.theme.border};
   transition: background 0.25s, color 0.25s;
+  align-self: flex-start;
 `;
 
 const CODE_BASE_STYLES = `
-  margin-left: 3rem;
+  flex: 1;
   padding: 1rem 1.5rem;
   font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
   font-size: 0.875rem;
@@ -123,19 +125,16 @@ const CODE_BASE_STYLES = `
   transition: color 0.25s, background 0.25s;
 `;
 
-const CodeDisplay = styled.div`
-  ${CODE_BASE_STYLES}
-  color: ${p => p.theme.codeColor};
-  cursor: text;
-  outline: none;
-`;
-
-const CodeEditable = styled.div`
+const CodeTextarea = styled.textarea`
   ${CODE_BASE_STYLES}
   color: ${p => p.theme.codeColor};
   outline: none;
   border: none;
   background: transparent;
+  resize: none;
+  overflow: hidden;
+  width: 100%;
+  caret-color: ${p => p.theme.codeColor};
 `;
 
 const EditorFooter = styled.div`
@@ -310,25 +309,60 @@ const THEME_OPTIONS = [
   { value: 'dark',  label: 'Dark' },
 ];
 
+
+// ─── Language detection ───────────────────────────────────────────────────────
+function detectLanguage(code) {
+  const c = code.trim();
+
+  // HTML
+  if (/<(!DOCTYPE|html|head|body|div|span|p|a|img|script|style|meta|link|h[1-6]|ul|li|table|form|input)/i.test(c)) {
+    return 'html';
+  }
+
+  // CSS - before JS to avoid false positives
+  if (/^[\s\S]*[.#]?[\w-]+\s*\{[\s\S]*:[\s\S]*\}/.test(c) && !c.includes('function') && !c.includes('=>')) {
+    return 'css';
+  }
+
+  // Python
+  if (/^(def |class |import |from |if __name__|print\(|elif |lambda |@\w)/.test(c) ||
+      /:\s*$/.test(c.split('\n')[0])) {
+    return 'python';
+  }
+
+  // Java
+  if (/(public\s+(class|interface|enum|static)|@Override|System\.out|import\s+java\.|void\s+\w+\s*\()/.test(c)) {
+    return 'java';
+  }
+
+  // JavaScript / default
+  if (/(const |let |var |function |=>|console\.|require\(|import .* from|export (default|const))/.test(c)) {
+    return 'javascript';
+  }
+
+  return null; // unknown, don't change
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 function CodeEditor({ code, language, theme, onCodeChange, onLanguageChange, onThemeChange }) {
-  const [isLangOpen,  setIsLangOpen]  = useState(false);
-  const [isThemeOpen, setIsThemeOpen] = useState(false);
-  const [isEditing,   setIsEditing]   = useState(false);
-  const [shareUrl,    setShareUrl]    = useState(null);
+  const [isLangOpen,   setIsLangOpen]   = useState(false);
+  const [isThemeOpen,  setIsThemeOpen]  = useState(false);
+  const [shareUrl,     setShareUrl]     = useState(null);
   const [shareLoading, setShareLoading] = useState(false);
   const [shareError,   setShareError]   = useState('');
   const [copied,       setCopied]       = useState(false);
 
-  const codeRef = useRef(null);
+  const textareaRef = useRef(null);
   const t = THEMES[theme] || THEMES.light;
   const darkMode = theme === 'dark';
 
+  // Auto-resize textarea to fit content
   useEffect(() => {
-    if (isEditing && codeRef.current) {
-      codeRef.current.focus();
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
     }
-  }, [isEditing]);
+  }, [code]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -337,21 +371,32 @@ function CodeEditor({ code, language, theme, onCodeChange, onLanguageChange, onT
     return () => document.removeEventListener('click', handler);
   }, []);
 
-  const handleCodeInput = (e) => {
-    onCodeChange(e.currentTarget.innerText || '');
-  };
-
-  const handlePaste = (e) => {
-    e.preventDefault();
-    const text = (e.clipboardData || window.clipboardData).getData('text');
-    document.execCommand('insertText', false, text);
-  };
-
   const handleKeyDown = (e) => {
     if (e.key === 'Tab') {
       e.preventDefault();
-      document.execCommand('insertText', false, '  ');
+      const start = e.target.selectionStart;
+      const end = e.target.selectionEnd;
+      const newCode = code.substring(0, start) + '  ' + code.substring(end);
+      onCodeChange(newCode);
+      // Restore cursor after state update
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.selectionStart = start + 2;
+          textareaRef.current.selectionEnd = start + 2;
+        }
+      });
     }
+  };
+
+  const handlePaste = (e) => {
+    // Let the paste happen naturally, then detect language
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        const pasted = textareaRef.current.value;
+        const detected = detectLanguage(pasted);
+        if (detected) onLanguageChange(detected);
+      }
+    });
   };
 
   const handleShare = async () => {
@@ -401,24 +446,18 @@ function CodeEditor({ code, language, theme, onCodeChange, onLanguageChange, onT
             ))}
           </LineNumbers>
 
-          {isEditing ? (
-              <CodeEditable
-                  ref={codeRef}
-                  theme={t}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={handleCodeInput}
-                  onKeyDown={handleKeyDown}
-                  onBlur={() => setIsEditing(false)}
-                  onPaste={handlePaste}
-              >
-                {code || ''}
-              </CodeEditable>
-          ) : (
-              <CodeDisplay theme={t} onClick={() => setIsEditing(true)}>
-                {code || ''}
-              </CodeDisplay>
-          )}
+          <CodeTextarea
+              ref={textareaRef}
+              theme={t}
+              value={code || ''}
+              onChange={e => onCodeChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              spellCheck={false}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              onPaste={handlePaste}
+          />
         </CodeArea>
 
         {shareError && <ErrorBanner>{shareError}</ErrorBanner>}
