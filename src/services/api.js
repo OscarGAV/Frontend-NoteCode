@@ -71,3 +71,7 @@ export async function getSnippetByShareUrl(urlCode) {
 export async function getSnippetById(id) {
     return request(`/code-snippets/${id}`);
 }
+
+export async function getSnippetsByUser(userId) {
+    return request(`/code-snippets/user/${userId}`);
+}

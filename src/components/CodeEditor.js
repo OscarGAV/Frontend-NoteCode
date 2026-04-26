@@ -85,7 +85,13 @@ const CodeArea = styled.div`
   position: relative;
   background: ${p => p.theme.editorBg};
   overflow: hidden;
+  max-height: 420px;
+  overflow-y: auto;
   transition: background 0.25s;
+
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: rgba(139,92,246,0.25); border-radius: 3px; }
 `;
 
 const LineNumbers = styled.div`
@@ -113,7 +119,7 @@ const CODE_BASE_STYLES = `
   line-height: 1.5;
   white-space: pre-wrap;
   word-wrap: break-word;
-  min-height: 300px;
+  min-height: 200px;
   transition: color 0.25s, background 0.25s;
 `;
 
